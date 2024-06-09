@@ -27,11 +27,12 @@
         <div class="key">.</div>
         <div class="key" id="clear">C</div>
     </div>
+    <div id="payment-container"></div>
     <button id="request-payment">Request Payment</button>
 
     <script>
         let amount = '';
-
+        
         document.querySelectorAll('.key').forEach(key => {
             key.addEventListener('click', () => {
                 const value = key.textContent;
@@ -44,43 +45,51 @@
             });
         });
 
-        document.getElementById('request-payment').addEventListener('click', () => {
-            const amountCents = Math.round(parseFloat(amount) * 100);
-            if (amountCents > 0) {
-                // Initialize Square Reader
-                const paymentRequest = new SqPaymentRequest({
-                    request: {
-                        amount: amountCents,
-                        currencyCode: 'USD',
-                    },
-                    config: {
-                        applicationId: {AppID},
-                        locationId: {locationID},
-                    },
-                });
+        async function initializeCard(payments) {
+            const card = await payments.card();
+            await card.attach('#payment-container');
+            return card;
+        }
 
-                paymentRequest.start()
-                    .then(nonce => {
-                        // Send nonce to your server
-                        fetch('/process-payment', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ nonce: nonce })
-                        })
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.success) {
-                                alert('Payment Successful!');
-                            } else {
-                                alert('Payment Failed: ' + data.error);
-                            }
-                        });
-                    })
-                    .catch(error => console.error('Error:', error));
-            } else {
-                alert('Please enter a valid amount');
-            }
-        });
+        async function createPayment() {
+            const payments = Square.payments({AppID}, {LocationID});
+            const card = await initializeCard(payments);
+
+            document.getElementById('request-payment').addEventListener('click', async () => {
+                const amountCents = Math.round(parseFloat(amount) * 100);
+                if (amountCents > 0) {
+                    try {
+                        const result = await card.tokenize();
+                        if (result.status === 'OK') {
+                            fetch('/process-payment', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ nonce: result.token, amount: amountCents })
+                            })
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data.success) {
+                                    alert('Payment Successful!');
+                                } else {
+                                    alert('Payment Failed: ' + data.error);
+                                }
+                            })
+                            .catch(error => console.error('Error:', error));
+                        } else {
+                            console.error('Tokenization failed:', result.errors);
+                            alert('Tokenization failed');
+                        }
+                    } catch (error) {
+                        console.error('Error:', error);
+                        alert('Payment request failed');
+                    }
+                } else {
+                    alert('Please enter a valid amount');
+                }
+            });
+        }
+
+        createPayment();
     </script>
 </body>
 </html>

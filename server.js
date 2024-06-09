@@ -7,7 +7,7 @@ const port = 3000;
 app.use(bodyParser.json());
 
 app.post('/process-payment', async (req, res) => {
-    const { nonce } = req.body;
+    const { nonce, amount } = req.body;
 
     try {
         // Create a Stripe token from the Square nonce
@@ -15,7 +15,7 @@ app.post('/process-payment', async (req, res) => {
 
         // Charge the card using the Stripe token
         const charge = await stripe.charges.create({
-            amount: 100, // $1.00 in cents
+            amount: amount, // amount in cents
             currency: 'usd',
             source: token.id,
             description: 'Example charge'
@@ -23,6 +23,7 @@ app.post('/process-payment', async (req, res) => {
 
         res.json({ success: true, charge });
     } catch (error) {
+        console.error('Payment processing failed:', error);
         res.status(500).json({ error: error.message });
     }
 });
